@@ -1,12 +1,10 @@
 [![License BSD-2-Clause](https://img.shields.io/badge/License-BSD--2--Clause-blue.svg)](https://opensource.org/licenses/BSD-2-Clause)
 [![License MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 [![AppVeyor CI](https://ci.appveyor.com/api/projects/status/github/KizzyCode/mqtt-tiny-rust?svg=true)](https://ci.appveyor.com/project/KizzyCode/mqtt-tiny-rust)
-<!--
 [![docs.rs](https://docs.rs/mqtt-tiny/badge.svg)](https://docs.rs/mqtt-tiny)
 [![crates.io](https://img.shields.io/crates/v/mqtt-tiny.svg)](https://crates.io/crates/mqtt-tiny)
 [![Download numbers](https://img.shields.io/crates/d/mqtt-tiny.svg)](https://crates.io/crates/mqtt-tiny)
 [![dependency status](https://deps.rs/crate/mqtt-tiny/latest/status.svg)](https://deps.rs/crate/mqtt-tiny)
--->
 
 # `mqtt-tiny`
 Welcome to `mqtt-tiny` 🎉

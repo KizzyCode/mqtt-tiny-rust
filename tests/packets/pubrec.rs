@@ -1,3 +1,5 @@
+#![cfg(any(feature = "std", feature = "arrayvec"))]
+
 use core::ops::Deref;
 use mqtt_tiny::{packets::TryFromIterator, Pubrec};
 

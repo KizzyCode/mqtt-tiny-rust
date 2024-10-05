@@ -11,7 +11,7 @@ Welcome to `mqtt-tiny` 🎉
 
 `mqtt-tiny` is a tiny, `no-std`-compatible
 [MQTT 3.1.1](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html) codec implementation. It is currently
-limited to packet en-/decoding, and does not handle state or transport-level stuff.
+limited to packet en- and decoding, and does not handle state or transport-level stuff.
 
 ## Example
 ```rust ignore

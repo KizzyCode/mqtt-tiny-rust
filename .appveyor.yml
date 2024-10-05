@@ -15,12 +15,17 @@ platform:
 # The Rust feature matrix
 configuration:
   - --features=
+  - --features=std
+  - --features=arrayvec
+  - --features=std,arrayvec
 
 
 # General environment vars
 environment:
   # Promote warnings to errors
   RUSTFLAGS: -D warnings
+  # Allocate 8 MiB stack memory for arrayvec tests
+  RUST_MIN_STACK: 8388608
 
 
 # Fail fast if one job in the matrix fails
@@ -37,7 +42,7 @@ for:
         - platform: x86_64-pc-windows-gnu
         - platform: i686-pc-windows-gnu
     environment:
-      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2019
+      APPVEYOR_BUILD_WORKER_IMAGE: Visual Studio 2022
     install:
       - appveyor DownloadFile https://win.rustup.rs/ -FileName rustup-init.exe
       - rustup-init.exe -y --default-host "%PLATFORM%"
@@ -51,7 +56,7 @@ for:
       only:
         - platform: x86_64-unknown-linux-gnu
     environment:
-      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2004
+      APPVEYOR_BUILD_WORKER_IMAGE: Ubuntu2204
     install:
       - curl https://sh.rustup.rs -sSf -o rustup-init.sh
       - sh rustup-init.sh -y --default-host "$PLATFORM"

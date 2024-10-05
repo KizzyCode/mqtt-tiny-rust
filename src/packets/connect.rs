@@ -1,14 +1,19 @@
 //! MQTT [`CONNECT`](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718033)
 
 use crate::{
-    coding::{Length, Reader, Writer},
-    error::MqttError,
+    anyvec::AnyVec,
+    coding::{
+        encoder::{BytesIter, OptionalBytesIter, PacketLenIter, U16Iter, U8Iter, Unit},
+        length::Length,
+        Decoder, Encoder,
+    },
+    packets::TryFromIterator,
 };
-use std::io::{Read, Write};
+use core::iter::Chain;
 
-/// An MQTT [`CONNECT` packet](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718028)
-#[derive(Debug, Clone)]
-pub struct MqttConnect {
+/// An MQTT [`CONNECT` packet](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718033)
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Connect<Bytes> {
     /// The seconds to keep the connection alive
     keep_alive_secs: u16,
     /// When set to `true` the client and server need not process the deletion of state atomically
@@ -16,123 +21,140 @@ pub struct MqttConnect {
     /// This bit specifies if the will message is to be Retained when it is published
     will_retain: bool,
     /// The QoS level to be used when publishing the will message
+    ///
+    /// # QoS Levels
+    /// Valid QoS levels are:
+    ///  - `0`: At most one delivery
+    ///  - `1`: At least one delivery
+    ///  - `2`: Exactly one delivery
     will_qos: u8,
     /// The client identifier
     ///
-    /// # Possible allowed characters
-    /// The only possible allowed characters are `0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`, and
-    /// should not be longer than 23 bytes.
-    client_id: String,
+    /// # Important
+    /// MQTT allows only the characters `0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`, and the
+    /// identifier should not be longer than 23 bytes.
+    client_id: Bytes,
     /// The will topic
-    will_topic: Option<String>,
+    will_topic: Option<Bytes>,
     /// The will message
-    will_message: Option<String>,
+    will_message: Option<Bytes>,
     /// The username
-    username: Option<String>,
+    username: Option<Bytes>,
     /// The password
-    password: Option<Vec<u8>>,
+    password: Option<Bytes>,
 }
-impl MqttConnect {
-    /// Creates a new packet
-    pub fn new<T>(keep_alive_secs: u16, clean_session: bool, client_id: T) -> Self
-    where
-        T: ToString,
-    {
-        Self {
-            keep_alive_secs,
-            clean_session,
-            will_retain: false,
-            will_qos: 0,
-            client_id: client_id.to_string(),
-            will_topic: None,
-            will_message: None,
-            username: None,
-            password: None,
-        }
-    }
-    /// Extends `self` with a last-will topic and message
-    pub fn with_will<A, B>(mut self, topic: A, message: B, qos: u8, retain: bool) -> Self
-    where
-        A: ToString,
-        B: ToString,
-    {
-        self.will_topic = Some(topic.to_string());
-        self.will_message = Some(message.to_string());
-        self.will_retain = retain;
-        self.will_qos = qos;
-        self
-    }
-    /// Extends `self` to authenticate with a username
-    pub fn with_username<T>(mut self, username: T) -> Self
-    where
-        T: ToString,
-    {
-        self.username = Some(username.to_string());
-        self
-    }
-    /// Extends `self` to authenticate with a password
-    pub fn with_password<T>(mut self, password: T) -> Self
-    where
-        T: Into<Vec<u8>>,
-    {
-        self.password = Some(password.into());
-        self
-    }
-
-    /// The seconds to keep the connection alive
-    pub const fn keep_alive_secs(&self) -> u16 {
-        self.keep_alive_secs
-    }
-    /// When set to `true` the client and server need not process the deletion of state atomically
-    pub const fn clean_session(&self) -> bool {
-        self.clean_session
-    }
-    /// This bit specifies if the will message is to be Retained when it is published
-    pub const fn will_retain(&self) -> bool {
-        self.will_retain
-    }
-    /// The QoS level to be used when publishing the will message
-    pub const fn will_qos(&self) -> u8 {
-        self.will_qos
-    }
-    /// The client identifier
-    ///
-    /// # Possible allowed characters
-    /// The only possible allowed characters are `0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`, and
-    /// should not be longer than 23 bytes.
-    pub fn client_id(&self) -> &str {
-        &self.client_id
-    }
-    /// The will topic
-    pub fn will_topic(&self) -> Option<&str> {
-        self.will_topic.as_deref()
-    }
-    /// The will message
-    pub fn will_message(&self) -> Option<&str> {
-        self.will_message.as_deref()
-    }
-    /// The username
-    pub fn username(&self) -> Option<&str> {
-        self.username.as_deref()
-    }
-    /// The password
-    pub fn password(&self) -> Option<&[u8]> {
-        self.password.as_deref()
-    }
-}
-impl MqttConnect {
+impl<Bytes> Connect<Bytes>
+where
+    Bytes: AnyVec<u8>,
+{
     /// The packet type constant
     pub const TYPE: u8 = 1;
 
     /// The protocol name
     const PROTOCOL_NAME: [u8; 6] = *b"\x00\x04MQTT";
     /// The protocol constant for MQTT 3.1.1
-    const PROTOCOL_LEVEL_MQTT_3_1_1: [u8; 1] = *b"\x04";
+    const PROTOCOL_LEVEL_MQTT_3_1_1: u8 = 0x04;
 
-    /// Reads `Self` from the given source
-    pub fn read<T>(source: &mut T) -> Result<Self, MqttError>
+    /// Creates a new packet
+    pub fn new<T>(keep_alive_secs: u16, clean_session: bool, client_id: T) -> Result<Self, &'static str>
     where
-        T: Read,
+        T: AsRef<[u8]>,
+    {
+        let client_id = Bytes::new(client_id.as_ref())?;
+        Ok(Self {
+            keep_alive_secs,
+            clean_session,
+            will_retain: false,
+            will_qos: 0,
+            client_id,
+            will_topic: None,
+            will_message: None,
+            username: None,
+            password: None,
+        })
+    }
+    /// Configures a last-will topic and message
+    ///
+    /// # QoS Levels
+    /// Valid QoS levels are:
+    ///  - `0`: At most one delivery
+    ///  - `1`: At least one delivery
+    ///  - `2`: Exactly one delivery
+    pub fn with_will<T, M>(mut self, topic: T, message: M, qos: u8, retain: bool) -> Result<Self, &'static str>
+    where
+        T: AsRef<[u8]>,
+        M: AsRef<[u8]>,
+    {
+        self.will_topic = Bytes::new(topic.as_ref()).map(Some)?;
+        self.will_message = Bytes::new(message.as_ref()).map(Some)?;
+        self.will_retain = retain;
+        self.will_qos = qos;
+        Ok(self)
+    }
+    /// Configures a username and password
+    pub fn with_username_password<U, P>(mut self, username: U, password: P) -> Result<Self, &'static str>
+    where
+        U: AsRef<[u8]>,
+        P: AsRef<[u8]>,
+    {
+        self.username = Bytes::new(username.as_ref()).map(Some)?;
+        self.password = Bytes::new(password.as_ref()).map(Some)?;
+        Ok(self)
+    }
+
+    /// Gets the seconds to keep the connection alive
+    pub const fn keep_alive_secs(&self) -> u16 {
+        self.keep_alive_secs
+    }
+
+    /// Gets the clean session bit which indicate if the client and server do not need to process the deletion of state
+    /// atomically
+    pub const fn clean_session(&self) -> bool {
+        self.clean_session
+    }
+
+    /// Gets the client identifier
+    ///
+    /// # Important
+    /// MQTT allows only the characters `0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ`, and the
+    /// identifier should not be longer than 23 bytes.
+    pub fn client_id(&self) -> &[u8] {
+        self.client_id.as_ref()
+    }
+
+    /// Gets the will-retain bit to indicate if the will message is to be Retained when it is published
+    pub const fn will_retain(&self) -> bool {
+        self.will_retain
+    }
+    /// Gets the QoS level to be used when publishing the will message
+    pub const fn will_qos(&self) -> u8 {
+        self.will_qos
+    }
+    /// Gets the will topic
+    pub fn will_topic(&self) -> Option<&[u8]> {
+        self.will_topic.as_ref().map(|bytes| bytes.as_ref())
+    }
+    /// Gets the will message
+    pub fn will_message(&self) -> Option<&[u8]> {
+        self.will_message.as_ref().map(|bytes| bytes.as_ref())
+    }
+
+    /// Gets the username
+    pub fn username(&self) -> Option<&[u8]> {
+        self.username.as_ref().map(|bytes| bytes.as_ref())
+    }
+    /// Gets the password
+    pub fn password(&self) -> Option<&[u8]> {
+        self.password.as_ref().map(|bytes| bytes.as_ref())
+    }
+}
+impl<Bytes> TryFromIterator for Connect<Bytes>
+where
+    Bytes: AnyVec<u8>,
+{
+    fn try_from_iter<T>(iter: T) -> Result<Self, &'static str>
+    where
+        T: IntoIterator<Item = u8>,
     {
         // Read packet:
         //  - header type and `0` flags
@@ -146,20 +168,28 @@ impl MqttConnect {
         //  - will message
         //  - username
         //  - password
-        let mut reader = Reader::new(source);
-        let _ = reader.read_header(&Self::TYPE)?;
-        let len = reader.read_packetlen()?;
+        let mut decoder = Decoder::new(iter);
+        let (Self::TYPE, _flags) = decoder.header()? else {
+            return Err("Invalid packet type");
+        };
         // Limit length
-        let mut reader = reader.limit(len);
-        let _ = reader.read_constant(&Self::PROTOCOL_NAME)?;
-        let _ = reader.read_version_constant(&Self::PROTOCOL_LEVEL_MQTT_3_1_1)?;
-        let [f_user, f_pass, will_retain, will_qos0, will_qos1, f_will_flag, clean_session, _] = reader.read_flags()?;
-        let keep_alive_secs = reader.read_u16()?;
-        let client_id = reader.read_string()?;
-        let will_topic = reader.read_optional_string(f_will_flag)?;
-        let will_message = reader.read_optional_string(f_will_flag)?;
-        let username = reader.read_optional_string(f_user)?;
-        let password = reader.read_optional_bytes(f_pass)?;
+        let len = decoder.packetlen()?;
+        let mut decoder = decoder.limit(len);
+        // Read protocol name byte-by-byte and version
+        let Self::PROTOCOL_NAME = decoder.raw()? else {
+            return Err("Invalid protocol name");
+        };
+        let Self::PROTOCOL_LEVEL_MQTT_3_1_1 = decoder.u8()? else {
+            return Err("Invalid protocol version");
+        };
+        // Read fields
+        let [f_user, f_pass, will_retain, will_qos0, will_qos1, f_will, clean_session, _] = decoder.bitmap()?;
+        let keep_alive_secs = decoder.u16()?;
+        let client_id = decoder.bytes()?;
+        let will_topic = decoder.optional_bytes(f_will)?;
+        let will_message = decoder.optional_bytes(f_will)?;
+        let username = decoder.optional_bytes(f_user)?;
+        let password = decoder.optional_bytes(f_pass)?;
 
         // Init self
         let will_qos = ((will_qos0 as u8) << 1) | (will_qos1 as u8);
@@ -175,13 +205,41 @@ impl MqttConnect {
             password,
         })
     }
+}
+impl<Bytes> IntoIterator for Connect<Bytes>
+where
+    Bytes: AnyVec<u8>,
+{
+    type Item = u8;
+    #[rustfmt::skip]
+    type IntoIter =
+        // Complex iterator built out of the individual message fields
+        Chain<Chain<Chain<Chain<Chain<Chain<Chain<Chain<Chain<Chain<Chain<
+            // - header type and `0` flags
+            Unit, U8Iter>,
+            // - packet len
+            PacketLenIter>,
+            // - protocol name
+            <[u8; 6] as IntoIterator>::IntoIter>,
+            // - protocol level
+            U8Iter>,
+            // - connect flags
+            U8Iter>,
+            // - keep-alive
+            U16Iter>,
+            // - client id
+            BytesIter<Bytes>>,
+            // - will topic
+            OptionalBytesIter<Bytes>>,
+            // - will message
+            OptionalBytesIter<Bytes>>,
+            // - username
+            OptionalBytesIter<Bytes>>,
+            // - password
+            OptionalBytesIter<Bytes>>;
 
-    /// Writes `self` into the given sink
-    pub fn write<T>(self, sink: T) -> Result<T, MqttError>
-    where
-        T: Write,
-    {
-        // Assemble flags
+    fn into_iter(self) -> Self::IntoIter {
+        // Assemble protocol name and flags
         let flags = [
             self.username.is_some(),
             self.password.is_some(),
@@ -204,16 +262,16 @@ impl MqttConnect {
         //  - username
         //  - password
         let len = Length::new()
-            .add_array(&Self::PROTOCOL_NAME)
-            .add_array(&Self::PROTOCOL_LEVEL_MQTT_3_1_1)
-            .add_flags(&flags)
-            .add_u16(&self.keep_alive_secs)
-            .add_string(&self.client_id)
-            .add_optional_string(&self.will_topic)
-            .add_optional_string(&self.will_message)
-            .add_optional_string(&self.username)
-            .add_optional_bytes(&self.password)
-            .finalize();
+            .raw(&Self::PROTOCOL_NAME)
+            .u8(&Self::PROTOCOL_LEVEL_MQTT_3_1_1)
+            .bitmap(&flags)
+            .u16(&self.keep_alive_secs)
+            .bytes(&self.client_id)
+            .optional_bytes(&self.will_topic)
+            .optional_bytes(&self.will_message)
+            .optional_bytes(&self.username)
+            .optional_bytes(&self.password)
+            .into();
 
         // Write header:
         //  - header type and `0` flags
@@ -227,18 +285,18 @@ impl MqttConnect {
         //  - will message
         //  - username
         //  - password
-        Writer::new(sink)
-            .write_header(Self::TYPE, [false, false, false, false])?
-            .write_packetlen(len)?
-            .write_array(Self::PROTOCOL_NAME)?
-            .write_array(Self::PROTOCOL_LEVEL_MQTT_3_1_1)?
-            .write_flags(flags)?
-            .write_u16(self.keep_alive_secs)?
-            .write_string(self.client_id)?
-            .write_optional_string(self.will_topic)?
-            .write_optional_string(self.will_message)?
-            .write_optional_string(self.username)?
-            .write_optional_bytes(self.password)?
-            .finalize()
+        Encoder::default()
+            .header(Self::TYPE, [false, false, false, false])
+            .packetlen(len)
+            .raw(Self::PROTOCOL_NAME)
+            .u8(Self::PROTOCOL_LEVEL_MQTT_3_1_1)
+            .bitmap(flags)
+            .u16(self.keep_alive_secs)
+            .bytes(self.client_id)
+            .optional_bytes(self.will_topic)
+            .optional_bytes(self.will_message)
+            .optional_bytes(self.username)
+            .optional_bytes(self.password)
+            .into_iter()
     }
 }

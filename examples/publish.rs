@@ -1,44 +1,44 @@
 //! Connects as client to an MQTT server, registers itself, publishes the current datetime under
 //! `mqtttinyexamplespublish/date` and disconnects itself gracefully
 
-use mqtt_tiny::packets::{
-    connack::MqttConnack, connect::MqttConnect, disconnect::MqttDisconnect, puback::MqttPuback, publish::MqttPublish,
-};
-use std::{env, net::TcpStream, time::UNIX_EPOCH};
-
+#[cfg(feature = "std")]
 pub fn main() {
+    use mqtt_tiny::{
+        packets::{ToWriter, TryFromReader},
+        Connack, Connect, Disconnect, Puback, Publish,
+    };
+    use std::{net::TcpStream, time::UNIX_EPOCH};
+
     // Connect to a server
-    let address = env::var("MQTT_ADDRESS").unwrap_or("127.0.0.1:1883".into());
-    let mut connection = TcpStream::connect(address).expect("failed to connect to server");
+    let mut connection = TcpStream::connect("127.0.0.1:1883").expect("failed to connect to server");
 
-    // Build connect packet
-    const CLIENT_ID: &str = "mqtttinyexamplesconnect";
-    let mut connect = MqttConnect::new(30, true, CLIENT_ID);
-    if let Ok(username) = env::var("MQTT_USERNAME") {
-        connect = connect.with_username(username)
-    }
-    if let Ok(password) = env::var("MQTT_PASSWORD") {
-        connect = connect.with_password(password)
-    }
-
-    // Connect
-    connect.write(&mut connection).expect("failed to write CONNECT packet");
-    let connack = MqttConnack::read(&mut connection).expect("failed to read CONNACK packet");
+    // Build connect packet...
+    Connect::new(30, true, b"mqtttinyexamplesconnect").expect("failed to create CONNECT packet")
+        // ...and connect
+        .write(&mut connection).expect("failed to send CONNECT packet");
+    let connack = Connack::try_read(&mut connection).expect("failed to read CONNACK packet");
     assert_eq!(connack.return_code(), 0, "connection was refused");
 
-    // Build publish packet
-    const TOPIC: &str = "mqtttinyexamplespublish/date";
+    // Prepare info for publish packet
     let unix_time = UNIX_EPOCH.elapsed().expect("failed to get unix timestamp");
     let packet_id = unix_time.as_nanos() as u16;
     let timestamp = format!("{}-unixtime", unix_time.as_secs());
-    let publish = MqttPublish::new(TOPIC, false).with_qos(1, packet_id, false).with_payload(timestamp);
 
-    // Publish topic
-    publish.write(&mut connection).expect("failed to write PUBLISH packet");
-    let puback = MqttPuback::read(&mut connection).expect("failed to read PUBACK packet");
+    // Build PUBLISH packet...
+    Publish::new(b"mqtttinyexamplespublish/date", timestamp.as_bytes(), false)
+        .expect("failed to create PUBLISH packet")
+        // ...and set QoS to 1, meaning we require an ACK...
+        .with_qos(1, packet_id, false)
+        // ...and publish message
+        .write(&mut connection).expect("failed to write PUBLISH packet");
+    let puback = Puback::try_read(&mut connection).expect("failed to read PUBACK packet");
     assert_eq!(puback.packet_id(), packet_id, "invalid packed ID for PUBACK packet");
 
     // Disconnect
-    let disconnect = MqttDisconnect::new();
-    disconnect.write(connection).expect("failed to write DISCONNECT packet");
+    Disconnect::new().write(&mut connection).expect("failed to write DISCONNECT packet");
+}
+
+#[cfg(not(feature = "std"))]
+pub fn main() {
+    panic!("Example requires the `std`-feature");
 }

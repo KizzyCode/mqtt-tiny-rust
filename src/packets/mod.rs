@@ -1,109 +1,91 @@
-//! Typed MQTT packets
+//! MQTT packet types
 
+pub mod packet;
 pub mod connack;
 pub mod connect;
-pub mod disconnect;
-pub mod pingreq;
-pub mod pingresp;
 pub mod publish;
 pub mod subscribe;
 pub mod unsubscribe;
-include!("_acklike.rs");
+include!("_ack.rs");
+include!("_signal.rs");
 
-use crate::{
-    coding::Reader,
-    error::{ErrorKind, MqttError},
-    packets::{
-        connack::MqttConnack, connect::MqttConnect, disconnect::MqttDisconnect, pingreq::MqttPingreq,
-        pingresp::MqttPingresp, puback::MqttPuback, pubcomp::MqttPubcomp, publish::MqttPublish, pubrec::MqttPubrec,
-        pubrel::MqttPubrel, suback::MqttSuback, subscribe::MqttSubscribe, unsuback::MqttUnsuback,
-        unsubscribe::MqttUnsubscribe,
-    },
-};
-use std::io::{Read, Write};
-
-/// A type-erased MQTT packet
-#[derive(Debug, Clone)]
-pub enum MqttPacket {
-    /// An [MqttConnack] packet
-    CONNACK(MqttConnack),
-    /// An [MqttConnect] packet
-    CONNECT(MqttConnect),
-    /// An [MqttDisconnect] packet
-    DISCONNECT(MqttDisconnect),
-    /// An [MqttPingreq] packet
-    PINGREQ(MqttPingreq),
-    /// An [MqttPingresp] packet
-    PINGRESP(MqttPingresp),
-    /// An [MqttPuback] packet
-    PUBACK(MqttPuback),
-    /// An [MqttPubcomp] packet
-    PUBCOMP(MqttPubcomp),
-    /// An [MqttPublish] packet
-    PUBLISH(MqttPublish),
-    /// An [MqttPubrec] packet
-    PUBREC(MqttPubrec),
-    /// An [MqttPubrel] packet
-    PUBREL(MqttPubrel),
-    /// An [MqttSuback] packet
-    SUBACK(MqttSuback),
-    /// An [MqttSubscribe] packet
-    SUBSCRIBE(MqttSubscribe),
-    /// An [MqttUnsuback] packet
-    UNSUBACK(MqttUnsuback),
-    /// An [MqttUnsubscribe] packet
-    UNSUBSCRIBE(MqttUnsubscribe),
-}
-impl MqttPacket {
-    /// Reads `Self` from the given source
-    pub fn read<T>(source: &mut T) -> Result<Self, MqttError>
+/// Traits for elements that can be build from a byte iterator
+pub trait TryFromIterator
+where
+    Self: Sized,
+{
+    /// Tries to build `Self` from the given byte iterator
+    fn try_from_iter<T>(iter: T) -> Result<Self, &'static str>
     where
-        T: Read,
-    {
-        // We have to peek at the header to determine the type
-        let mut source = Reader::new(source).buffered();
-        let header = source.peek_u8()?;
+        T: IntoIterator<Item = u8>;
+}
 
-        // Select the appropriate packet depending on the type
-        match header >> 4 {
-            MqttConnack::TYPE => MqttConnack::read(&mut source).map(Self::CONNACK),
-            MqttConnect::TYPE => MqttConnect::read(&mut source).map(Self::CONNECT),
-            MqttDisconnect::TYPE => MqttDisconnect::read(&mut source).map(Self::DISCONNECT),
-            MqttPingreq::TYPE => MqttPingreq::read(&mut source).map(Self::PINGREQ),
-            MqttPingresp::TYPE => MqttPingresp::read(&mut source).map(Self::PINGRESP),
-            MqttPuback::TYPE => MqttPuback::read(&mut source).map(Self::PUBACK),
-            MqttPubcomp::TYPE => MqttPubcomp::read(&mut source).map(Self::PUBCOMP),
-            MqttPublish::TYPE => MqttPublish::read(&mut source).map(Self::PUBLISH),
-            MqttPubrec::TYPE => MqttPubrec::read(&mut source).map(Self::PUBREC),
-            MqttPubrel::TYPE => MqttPubrel::read(&mut source).map(Self::PUBREL),
-            MqttSuback::TYPE => MqttSuback::read(&mut source).map(Self::SUBACK),
-            MqttSubscribe::TYPE => MqttSubscribe::read(&mut source).map(Self::SUBSCRIBE),
-            MqttUnsuback::TYPE => MqttUnsuback::read(&mut source).map(Self::UNSUBACK),
-            MqttUnsubscribe::TYPE => MqttUnsubscribe::read(&mut source).map(Self::UNSUBSCRIBE),
-            _ => Err(ErrorKind::InvalidValue.into()),
+/// Traits for elements that can be built from a byte reader
+#[cfg(feature = "std")]
+pub trait TryFromReader
+where
+    Self: Sized,
+{
+    /// Tries to build `Self` from the given byte iterator
+    fn try_read<T>(reader: T) -> Result<Self, std::io::Error>
+    where
+        T: std::io::Read;
+}
+#[cfg(feature = "std")]
+impl<T> TryFromReader for T
+where
+    T: TryFromIterator,
+{
+    fn try_read<R>(reader: R) -> Result<Self, std::io::Error>
+    where
+        R: std::io::Read,
+    {
+        use std::io::{Error, ErrorKind};
+
+        // Create a byte iterator from the reader
+        let mut last_error = None;
+        let iter = reader.bytes()
+            // Retain an I/O error if any
+            .map(|result| result.map_err(|e| last_error = Some(e)))
+            // Yield bytes as long as there is not an error
+            .map_while(|result| result.ok());
+
+        // Try to build `Self` from iterator
+        match (Self::try_from_iter(iter), last_error) {
+            (Ok(value), _) => Ok(value),
+            (Err(_), Some(e)) => Err(e),
+            (Err(e), _) => Err(Error::new(ErrorKind::InvalidData, e)),
         }
     }
+}
 
-    /// Writes `self` into the given sink
-    pub fn write<T>(self, sink: T) -> Result<T, MqttError>
+/// Traits for elements that can be written to a byte writer
+#[cfg(feature = "std")]
+pub trait ToWriter {
+    /// Writes `self` to the given byte writer
+    fn write<T>(self, writer: T) -> Result<(), std::io::Error>
     where
-        T: Write,
+        T: std::io::Write;
+}
+#[cfg(feature = "std")]
+impl<T> ToWriter for T
+where
+    T: IntoIterator<Item = u8>,
+{
+    fn write<W>(self, writer: W) -> Result<(), std::io::Error>
+    where
+        W: std::io::Write,
     {
-        match self {
-            MqttPacket::CONNACK(this) => this.write(sink),
-            MqttPacket::CONNECT(this) => this.write(sink),
-            MqttPacket::DISCONNECT(this) => this.write(sink),
-            MqttPacket::PINGREQ(this) => this.write(sink),
-            MqttPacket::PINGRESP(this) => this.write(sink),
-            MqttPacket::PUBACK(this) => this.write(sink),
-            MqttPacket::PUBCOMP(this) => this.write(sink),
-            MqttPacket::PUBLISH(this) => this.write(sink),
-            MqttPacket::PUBREC(this) => this.write(sink),
-            MqttPacket::PUBREL(this) => this.write(sink),
-            MqttPacket::SUBACK(this) => this.write(sink),
-            MqttPacket::SUBSCRIBE(this) => this.write(sink),
-            MqttPacket::UNSUBACK(this) => this.write(sink),
-            MqttPacket::UNSUBSCRIBE(this) => this.write(sink),
+        use std::io::{BufWriter, Write};
+
+        // Write each byte in a buffered way for performance
+        let mut writer = BufWriter::new(writer);
+        for byte in self {
+            // Write byte
+            writer.write_all(&[byte])?;
         }
+
+        // Flush buffer
+        writer.flush()
     }
 }

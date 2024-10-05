@@ -1,76 +1,94 @@
 //! MQTT [`CONNACK`](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718033)
 
 use crate::{
-    coding::{Reader, Writer},
-    error::MqttError,
+    coding::{
+        encoder::{PacketLenIter, U8Iter, Unit},
+        Decoder, Encoder,
+    },
+    packets::TryFromIterator,
 };
-use std::io::{Read, Write};
+use core::iter::Chain;
 
 /// An MQTT [`CONNACK` packet](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718033)
-#[derive(Debug, Clone)]
-pub struct MqttConnack {
-    /// The acknowledgement flag
-    ack_flag: bool,
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Connack {
+    /// Whether a previous session is present or not
+    session_present: bool,
     /// The return code
     return_code: u8,
 }
-impl MqttConnack {
+impl Connack {
+    /// The packet type constant
+    pub const TYPE: u8 = 2;
+
+    /// The expected body length
+    const BODY_LEN: usize = 2;
+
     /// Creates a new packet
-    pub const fn new(ack_flag: bool, return_code: u8) -> Self {
-        Self { ack_flag, return_code }
+    pub const fn new(session_present: bool, return_code: u8) -> Self {
+        Self { session_present, return_code }
     }
 
-    /// The acknowledgement flag
-    pub const fn ack_flag(&self) -> bool {
-        self.ack_flag
+    /// Whether a previous session is present or not
+    pub const fn session_present(&self) -> bool {
+        self.session_present
     }
     /// The return code
     pub const fn return_code(&self) -> u8 {
         self.return_code
     }
 }
-impl MqttConnack {
-    /// The packet type constant
-    pub const TYPE: u8 = 2;
-
-    /// For this packet, the body length is fixed
-    const BODY_LEN: [u8; 1] = [2];
-
-    /// Reads `Self` from the given source
-    pub fn read<T>(source: &mut T) -> Result<Self, MqttError>
+impl TryFromIterator for Connack {
+    fn try_from_iter<T>(iter: T) -> Result<Self, &'static str>
     where
-        T: Read,
+        T: IntoIterator<Item = u8>,
     {
         // Read packet:
         //  - header type and `0` flags
         //  - packet len
-        //  - ACK flag
+        //  - ACK flags
         //  - return code
-        let mut reader = Reader::new(source);
-        let _ = reader.read_header(&Self::TYPE)?;
-        let _ = reader.read_constant(&Self::BODY_LEN)?;
-        let [_, _, _, _, _, _, _, ack_flag] = reader.read_flags()?;
-        let return_code = reader.read_u8()?;
+        let mut decoder = Decoder::new(iter);
+        let (Self::TYPE, _flags) = decoder.header()? else {
+            return Err("Invalid packet type");
+        };
+        let Self::BODY_LEN = decoder.packetlen()? else {
+            return Err("Invalid packet length");
+        };
+        // Read fields
+        let [_, _, _, _, _, _, _, session_present] = decoder.bitmap()?;
+        let return_code = decoder.u8()?;
 
         // Init self
-        Ok(Self { ack_flag, return_code })
+        Ok(Self { session_present, return_code })
     }
+}
+impl IntoIterator for Connack {
+    type Item = u8;
+    #[rustfmt::skip]
+    type IntoIter =
+        // Complex iterator built out of the individual message fields
+        Chain<Chain<Chain<Chain<
+            // - header type and `0` flags
+            Unit, U8Iter>,
+            // - packet len
+            PacketLenIter>,
+            // - ACK flags
+            U8Iter>,
+            // - return code
+            U8Iter>;
 
-    /// Writes `self` into the given sink
-    pub fn write<T>(self, sink: T) -> Result<T, MqttError>
-    where
-        T: Write,
-    {
+    fn into_iter(self) -> Self::IntoIter {
         // Write packet:
         //  - header type and `0` flags
         //  - packet len
-        //  - ACK flag
+        //  - ACK flags
         //  - return code
-        Writer::new(sink)
-            .write_header(Self::TYPE, [false, false, false, false])?
-            .write_array(Self::BODY_LEN)?
-            .write_flags([false, false, false, false, false, false, false, self.ack_flag])?
-            .write_u8(self.return_code)?
-            .finalize()
+        Encoder::default()
+            .header(Self::TYPE, [false, false, false, false])
+            .packetlen(Self::BODY_LEN)
+            .bitmap([false, false, false, false, false, false, false, self.session_present])
+            .u8(self.return_code)
+            .into_iter()
     }
 }

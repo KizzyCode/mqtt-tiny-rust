@@ -9,26 +9,31 @@
 # `mqtt-tiny`
 Welcome to `mqtt-tiny` 🎉
 
-`mqtt-tiny` is a tiny [MQTT 3.1.1](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html) codec
-implementation. It is limited to packet en-/decoding, and does not handle state or transport-level stuff.
+`mqtt-tiny` is a tiny, `no-std`-compatible
+[MQTT 3.1.1](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html) codec implementation. It is currently
+limited to packet en-/decoding, and does not handle state or transport-level stuff.
 
 ## Example
-```rust
-use mqtt_tiny::packets::connect::MqttConnect;
+```rust no_run
+use mqtt_tiny::{
+    packets::{ToWriter, TryFromReader},
+    Connack, Connect, Disconnect,
+};
+use std::{net::TcpStream, thread, time::Duration};
 
-// Create a simple connect packet
-const CLIENT_ID: &str = "mqtttinyreadmeexample";
-let connect = MqttConnect::new(
-    30,        //keep_alive_secs: u16,
-    true,      //clean_session: bool,
-    CLIENT_ID, //client_id: impl ToString,
-);
+// Connect to a server
+let mut connection = TcpStream::connect("127.0.0.1:1883").expect("failed to connect to server");
+Connect::new(30, true, b"mqtttinyexamplesconnect").expect("failed to create CONNECT packet")
+    .write(&mut connection).expect("failed to send CONNECT packet");
 
-// Serialize the connect packet
-let connect_bytes = connect.write(Vec::new()).unwrap();
-assert_eq!(connect_bytes.len(), 35);
+// Await CONNACK
+let connack = Connack::try_read(&mut connection).expect("failed to read CONNACK packet");
+assert_eq!(connack.return_code(), 0, "connection was refused");
+
+// Sleep 3s
+const PAUSE: Duration = Duration::from_secs(3);
+thread::sleep(PAUSE);
+
+// Disconnect
+Disconnect::new().write(&mut connection).expect("failed to write DISCONNECT packet");
 ```
-
-### Running provided examples
-To run the provided example, just set the `MQTT_ADDRESS`, `MQTT_USERNAME` and `MQTT_PASSWORD` environment variables
-respectively to connect to your server.

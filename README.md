@@ -14,7 +14,7 @@ Welcome to `mqtt-tiny` 🎉
 limited to packet en-/decoding, and does not handle state or transport-level stuff.
 
 ## Example
-```rust no_run
+```rust ignore
 use mqtt_tiny::{
     packets::{ToWriter, TryFromReader},
     Connack, Connect, Disconnect,

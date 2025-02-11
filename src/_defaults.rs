@@ -1,5 +1,17 @@
 // Provides some type aliases that offer reasonable defaults for the underlying container types
 
+// Sanity check
+#[cfg(not(any(
+    // Invalid use of `std` with `arrayvec` or `heapless`
+    all(feature = "std", not(any(feature = "arrayvec", feature = "heapless"))),
+    // Invalid use of `heapless` with `std` or `arrayvec`
+    all(feature = "heapless", not(any(feature = "std", feature = "arrayvec"))),
+    // Invalid use of `arrayvec` with `heapless` or `std`
+    all(feature = "arrayvec", not(any(feature = "heapless", feature = "std"))),
+)))]
+// Raise a compiler error immediately
+compile_error!("Must not use multiple backing features together (i.e. `std` or `arrayvec` or `heapless`)");
+
 /// The default byte container type used within top-level types
 #[cfg(feature = "std")]
 #[doc(hidden)]
@@ -8,9 +20,16 @@ pub type Bytes = std::vec::Vec<u8>;
 ///
 /// # Note
 /// This default configuration allows for 256 bytes per byte field on the stack.
-#[cfg(all(not(feature = "std"), feature = "arrayvec"))]
+#[cfg(feature = "arrayvec")]
 #[doc(hidden)]
 pub type Bytes = arrayvec::ArrayVec<u8, 256>;
+/// The default byte container type used within top-level types
+///
+/// # Note
+/// This default configuration allows for 256 bytes per byte field on the stack.
+#[cfg(feature = "heapless")]
+#[doc(hidden)]
+pub type Bytes = heapless::Vec<u8, 256>;
 
 /// The default collection type for topic lists used within top-level types
 #[cfg(feature = "std")]
@@ -20,9 +39,16 @@ pub type Topics = std::vec::Vec<Bytes>;
 ///
 /// # Note
 /// This default configuration allows for 4 topics per unsubscribe message.
-#[cfg(all(not(feature = "std"), feature = "arrayvec"))]
+#[cfg(feature = "arrayvec")]
 #[doc(hidden)]
 pub type Topics = arrayvec::ArrayVec<Bytes, 4>;
+/// The default collection type for topic lists used within top-level types
+///
+/// # Note
+/// This default configuration allows for 4 topics per unsubscribe message.
+#[cfg(feature = "heapless")]
+#[doc(hidden)]
+pub type Topics = heapless::Vec<Bytes, 4>;
 
 /// The default collection type for topic+quality-of-service lists used within top-level types
 #[cfg(feature = "std")]
@@ -32,9 +58,16 @@ pub type TopicsQos = std::vec::Vec<(Bytes, u8)>;
 ///
 /// # Note
 /// This default configuration allows for 4 topic+quality-of-service tuples per subscribe message.
-#[cfg(all(not(feature = "std"), feature = "arrayvec"))]
+#[cfg(feature = "arrayvec")]
 #[doc(hidden)]
 pub type TopicsQos = arrayvec::ArrayVec<(Bytes, u8), 4>;
+/// The default collection type for topic+quality-of-service lists used within top-level types
+///
+/// # Note
+/// This default configuration allows for 4 topic+quality-of-service tuples per subscribe message.
+#[cfg(feature = "heapless")]
+#[doc(hidden)]
+pub type TopicsQos = heapless::Vec<(Bytes, u8), 4>;
 
 /// A type-erased MQTT packet
 pub type Packet = crate::packets::packet::Packet<Topics, TopicsQos, Bytes>;

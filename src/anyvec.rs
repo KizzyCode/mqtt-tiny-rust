@@ -52,7 +52,7 @@ impl<T> AnyVec<T> for std::vec::Vec<T> {
         Ok(())
     }
 }
-// Implement `AnyVec` for `Vec<u8>` if `std` is enabled
+// Implement `AnyVec` for `arrayvec::ArrayVec<T, CAP>` if `arrayvec` is enabled
 #[cfg(feature = "arrayvec")]
 impl<T, const CAP: usize> AnyVec<T> for arrayvec::ArrayVec<T, CAP> {
     fn insert(&mut self, index: usize, element: T) -> Result<(), &'static str> {
@@ -68,6 +68,26 @@ impl<T, const CAP: usize> AnyVec<T> for arrayvec::ArrayVec<T, CAP> {
         for element in elements.iter().cloned() {
             // Push each element
             self.try_push(element).map_err(|_| "Not enough memory")?;
+        }
+        Ok(())
+    }
+}
+// Implement `AnyVec` for `heapless::Vec<T, CAP>` if `heapless` is enabled
+#[cfg(feature = "heapless")]
+impl<T, const CAP: usize> AnyVec<T> for heapless::Vec<T, CAP> {
+    fn insert(&mut self, index: usize, element: T) -> Result<(), &'static str> {
+        // Insert element
+        self.insert(index, element).map_err(|_| "Index is invalid")
+    }
+
+    fn extend(&mut self, elements: &[T]) -> Result<(), &'static str>
+    where
+        T: Clone,
+    {
+        // Extend vector
+        for element in elements.iter().cloned() {
+            // Push each element
+            self.push(element).map_err(|_| "Not enough memory")?;
         }
         Ok(())
     }

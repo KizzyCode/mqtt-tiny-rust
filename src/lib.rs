@@ -23,5 +23,5 @@ pub mod packets;
 pub extern crate arrayvec;
 
 // Re-export default type aliases
-#[cfg(any(feature = "std", feature = "arrayvec"))]
+#[cfg(any(feature = "std", feature = "arrayvec", feature = "heapless"))]
 include!("_defaults.rs");

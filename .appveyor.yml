@@ -17,7 +17,7 @@ configuration:
   - --features=
   - --features=std
   - --features=arrayvec
-  - --features=std,arrayvec
+  - --features=heapless
 
 
 # General environment vars

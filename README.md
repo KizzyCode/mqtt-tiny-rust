@@ -37,3 +37,11 @@ thread::sleep(PAUSE);
 // Disconnect
 Disconnect::new().write(&mut connection).expect("failed to write DISCONNECT packet");
 ```
+
+## Storage Backings
+You can configure different predefined storage backings via feature flags:
+- `std::vec::Vec` via the `std` feature flag
+- `heapless::Vec` via the `heapless` feature flag
+- `arrayvec::ArrayVec` via the `arrayvec` feature flag
+
+Please note that the different predefined backings are mutually exclusive.

@@ -10,7 +10,7 @@ use crate::{
 };
 
 /// A type-erased MQTT packet
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Packet<TopicsSeq, TopicsQosSeq, Bytes> {
     /// An [`Connack`] packet
     Connack(Connack),

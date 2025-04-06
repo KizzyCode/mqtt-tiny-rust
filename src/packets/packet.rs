@@ -53,7 +53,7 @@ where
     {
         // We have to peek at the header to determine the type
         let mut decoder = iter.into_iter().peekable();
-        let header = decoder.next().ok_or("Empty packet")?;
+        let header = decoder.peek().ok_or("Empty packet")?;
 
         // Select the appropriate packet depending on the type
         match header >> 4 {

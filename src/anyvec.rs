@@ -1,8 +1,6 @@
 //! A bridge trait to unify required vector operations over multiple implementations
 
-use crate::err;
-use crate::error::{Memory, MemoryError};
-use core::cmp;
+use crate::error::MemoryError;
 
 /// A bridge trait to unify required vector operations over multiple implementations
 pub trait AnyVec<T>
@@ -35,6 +33,10 @@ where
 #[cfg(feature = "std")]
 impl<T> AnyVec<T> for std::vec::Vec<T> {
     fn insert(&mut self, index: usize, element: T) -> Result<(), MemoryError> {
+        use crate::err;
+        use crate::error::Memory;
+        use core::cmp;
+
         // Limit index and allocate slot
         let index = cmp::min(index, self.len());
         self.try_reserve(1).map_err(|_| err!(Memory, "failed to allocate memory"))?;
@@ -48,6 +50,9 @@ impl<T> AnyVec<T> for std::vec::Vec<T> {
     where
         T: Clone,
     {
+        use crate::err;
+        use crate::error::Memory;
+
         // Allocate capacity and extend vector
         self.try_reserve(elements.len()).map_err(|_| err!(Memory, "failed to allocate memory"))?;
         self.extend_from_slice(elements);
@@ -58,6 +63,10 @@ impl<T> AnyVec<T> for std::vec::Vec<T> {
 #[cfg(feature = "arrayvec")]
 impl<T, const CAP: usize> AnyVec<T> for arrayvec::ArrayVec<T, CAP> {
     fn insert(&mut self, index: usize, element: T) -> Result<(), MemoryError> {
+        use crate::err;
+        use crate::error::Memory;
+        use core::cmp;
+
         // Limit index and insert element
         let index = cmp::min(index, self.len());
         self.try_insert(index, element).map_err(|_| err!(Memory, "not enough memory"))
@@ -67,6 +76,9 @@ impl<T, const CAP: usize> AnyVec<T> for arrayvec::ArrayVec<T, CAP> {
     where
         T: Clone,
     {
+        use crate::err;
+        use crate::error::Memory;
+
         // Extend vector
         for element in elements.iter().cloned() {
             // Push each element
@@ -79,6 +91,10 @@ impl<T, const CAP: usize> AnyVec<T> for arrayvec::ArrayVec<T, CAP> {
 #[cfg(feature = "heapless")]
 impl<T, const CAP: usize> AnyVec<T> for heapless::Vec<T, CAP> {
     fn insert(&mut self, index: usize, element: T) -> Result<(), MemoryError> {
+        use crate::err;
+        use crate::error::Memory;
+        use core::cmp;
+
         // Limit index and insert element
         let index = cmp::min(index, self.len());
         self.insert(index, element).map_err(|_| err!(Memory, "not enough memory"))
@@ -88,6 +104,9 @@ impl<T, const CAP: usize> AnyVec<T> for heapless::Vec<T, CAP> {
     where
         T: Clone,
     {
+        use crate::err;
+        use crate::error::Memory;
+
         // Extend vector
         for element in elements.iter().cloned() {
             // Push each element

@@ -1,6 +1,6 @@
 [package]
 name = "mqtt-tiny"
-version = "0.3.1"
+version = "0.4.0"
 edition = "2021"
 authors = ["KizzyCode Software Labs./Keziah Biermann <development@kizzycode.de>"]
 keywords = []
@@ -16,8 +16,10 @@ appveyor = { repository = "KizzyCode/mqtt-tiny-rust" }
 
 
 [features]
-default = ["std"]
+#default = ["std", "backtrace"]
+default = ["heapless"]
 std = []
+backtrace = []
 arrayvec = ["dep:arrayvec"]
 heapless = ["dep:heapless"]
 

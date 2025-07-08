@@ -1,6 +1,7 @@
 #![cfg(any(feature = "std", feature = "arrayvec"))]
 
-use mqtt_tiny::coding::{length::Length, Decoder, Encoder};
+use mqtt_tiny::coding::length::Length;
+use mqtt_tiny::coding::{Decoder, Encoder};
 use std::ops::Deref;
 
 // Select an appropriate vector type

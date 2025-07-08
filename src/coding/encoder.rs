@@ -66,8 +66,8 @@ where
         T: AsRef<[u8]> + IntoIterator<Item = u8>,
     {
         // Encode length
-        #[allow(clippy::expect_used, reason = "Serious API misuse")]
-        let len_iter = u16::try_from(bytes.as_ref().len()).expect("Byte field is too long")
+        #[allow(clippy::expect_used, reason = "serious API misuse")]
+        let len_iter = u16::try_from(bytes.as_ref().len()).expect("byte field is too long")
             // Create iterator
             .to_be_bytes().into_iter();
 
@@ -96,8 +96,8 @@ where
     /// This function panics if the packet type is greater than `15` (`2^4 - 1`).
     pub fn header(self, type_: u8, flags: [bool; 4]) -> Encoder<Chain<Iter, U8Iter>> {
         // Validate type value
-        #[allow(clippy::panic, reason = "Serious API misuse")]
-        (assert!(type_ <= 15, "Packet type is too large"));
+        #[allow(clippy::panic, reason = "serious API misuse")]
+        (assert!(type_ <= 15, "packet type is too large"));
 
         // Assemble byte
         let byte = (type_ << 4)
@@ -115,10 +115,10 @@ where
     /// This function panics if the packet length is greater than `2^28 - 1`.
     pub fn packetlen(self, mut len: usize) -> Encoder<Chain<Iter, PacketLenIter>> {
         // Validate and compute packet length size
-        #[allow(clippy::panic, reason = "Packet length must be encoded in 4 or less heptets")]
-        #[allow(clippy::unusual_byte_groupings, reason = "Length bytes are encoded in heptets")]
+        #[allow(clippy::panic, reason = "packet length must be encoded in 4 or less heptets")]
+        #[allow(clippy::unusual_byte_groupings, reason = "length bytes are encoded in heptets")]
         let len_size = match len {
-            0b1_0000000_0000000_0000000_0000000.. => panic!("Packet length is too large"),
+            0b1_0000000_0000000_0000000_0000000.. => panic!("packet length is too large"),
             0b1_0000000_0000000_0000000.. => 4,
             0b1_0000000_0000000.. => 3,
             0b1_0000000.. => 2,
@@ -165,8 +165,8 @@ where
         // Find an iterator representation that works for both cases
         if let Some(bytes) = bytes {
             // Encode length
-            #[allow(clippy::expect_used, reason = "Serious API misuse")]
-            let len_iter = u16::try_from(bytes.as_ref().len()).expect("Byte field is too long")
+            #[allow(clippy::expect_used, reason = "serious API misuse")]
+            let len_iter = u16::try_from(bytes.as_ref().len()).expect("byte field is too long")
                 // Create iterator
                 .to_be_bytes().into_iter()
                 // This allows us to mock the None-case
@@ -198,8 +198,8 @@ where
             T: AsRef<[u8]> + IntoIterator<Item = u8>,
         {
             // Encode topic length
-            #[allow(clippy::expect_used, reason = "Serious API misuse")]
-            let len_iter = u16::try_from(topic.as_ref().len()).expect("Topic is too long")
+            #[allow(clippy::expect_used, reason = "serious API misuse")]
+            let len_iter = u16::try_from(topic.as_ref().len()).expect("topic is too long")
                 // Create iterator
                 .to_be_bytes().into_iter();
 
@@ -228,8 +228,8 @@ where
             T: AsRef<[u8]> + IntoIterator<Item = u8>,
         {
             // Encode topic length
-            #[allow(clippy::expect_used, reason = "Serious API misuse")]
-            let len_iter = u16::try_from(topic.as_ref().len()).expect("Topic is too long")
+            #[allow(clippy::expect_used, reason = "serious API misuse")]
+            let len_iter = u16::try_from(topic.as_ref().len()).expect("topic is too long")
                 // Create iterator
                 .to_be_bytes().into_iter();
 

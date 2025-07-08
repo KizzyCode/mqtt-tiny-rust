@@ -16,6 +16,7 @@
 
 pub mod anyvec;
 pub mod coding;
+pub mod error;
 pub mod packets;
 
 // Re-export `arrayvec` if enabled

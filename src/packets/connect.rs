@@ -1,14 +1,12 @@
 //! MQTT [`CONNECT`](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718033)
 
-use crate::{
-    anyvec::AnyVec,
-    coding::{
-        encoder::{BytesIter, OptionalBytesIter, PacketLenIter, U16Iter, U8Iter, Unit},
-        length::Length,
-        Decoder, Encoder,
-    },
-    packets::TryFromIterator,
-};
+use crate::anyvec::AnyVec;
+use crate::coding::encoder::{BytesIter, OptionalBytesIter, PacketLenIter, U16Iter, U8Iter, Unit};
+use crate::coding::length::Length;
+use crate::coding::{Decoder, Encoder};
+use crate::err;
+use crate::error::{Data, DecoderError, MemoryError};
+use crate::packets::TryFromIterator;
 use core::iter::Chain;
 
 /// An MQTT [`CONNECT` packet](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718033)
@@ -56,7 +54,7 @@ where
     const PROTOCOL_LEVEL_MQTT_3_1_1: u8 = 0x04;
 
     /// Creates a new packet
-    pub fn new<T>(keep_alive_secs: u16, clean_session: bool, client_id: T) -> Result<Self, &'static str>
+    pub fn new<T>(keep_alive_secs: u16, clean_session: bool, client_id: T) -> Result<Self, MemoryError>
     where
         T: AsRef<[u8]>,
     {
@@ -80,7 +78,7 @@ where
     ///  - `0`: At most one delivery
     ///  - `1`: At least one delivery
     ///  - `2`: Exactly one delivery
-    pub fn with_will<T, M>(mut self, topic: T, message: M, qos: u8, retain: bool) -> Result<Self, &'static str>
+    pub fn with_will<T, M>(mut self, topic: T, message: M, qos: u8, retain: bool) -> Result<Self, MemoryError>
     where
         T: AsRef<[u8]>,
         M: AsRef<[u8]>,
@@ -92,7 +90,7 @@ where
         Ok(self)
     }
     /// Configures a username and password
-    pub fn with_username_password<U, P>(mut self, username: U, password: P) -> Result<Self, &'static str>
+    pub fn with_username_password<U, P>(mut self, username: U, password: P) -> Result<Self, MemoryError>
     where
         U: AsRef<[u8]>,
         P: AsRef<[u8]>,
@@ -152,7 +150,7 @@ impl<Bytes> TryFromIterator for Connect<Bytes>
 where
     Bytes: AnyVec<u8>,
 {
-    fn try_from_iter<T>(iter: T) -> Result<Self, &'static str>
+    fn try_from_iter<T>(iter: T) -> Result<Self, DecoderError>
     where
         T: IntoIterator<Item = u8>,
     {
@@ -170,18 +168,21 @@ where
         //  - password
         let mut decoder = Decoder::new(iter);
         let (Self::TYPE, _flags) = decoder.header()? else {
-            return Err("Invalid packet type");
+            return Err(err!(Data::SpecViolation, "invalid packet type"))?;
         };
+
         // Limit length
         let len = decoder.packetlen()?;
         let mut decoder = decoder.limit(len);
+
         // Read protocol name byte-by-byte and version
         let Self::PROTOCOL_NAME = decoder.raw()? else {
-            return Err("Invalid protocol name");
+            return Err(err!(Data::SpecViolation, "invalid protocol name"))?;
         };
         let Self::PROTOCOL_LEVEL_MQTT_3_1_1 = decoder.u8()? else {
-            return Err("Invalid protocol version");
+            return Err(err!(Data::SpecViolation, "invalid protocol version"))?;
         };
+
         // Read fields
         let [f_user, f_pass, will_retain, will_qos0, will_qos1, f_will, clean_session, _] = decoder.bitmap()?;
         let keep_alive_secs = decoder.u16()?;

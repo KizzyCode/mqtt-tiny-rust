@@ -1,14 +1,12 @@
 //! MQTT [`PUBLISH`](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718037)
 
-use crate::{
-    anyvec::AnyVec,
-    coding::{
-        encoder::{BytesIter, OptionalU16Iter, PacketLenIter, U8Iter, Unit},
-        length::Length,
-        Decoder, Encoder,
-    },
-    packets::TryFromIterator,
-};
+use crate::anyvec::AnyVec;
+use crate::coding::encoder::{BytesIter, OptionalU16Iter, PacketLenIter, U8Iter, Unit};
+use crate::coding::length::Length;
+use crate::coding::{Decoder, Encoder};
+use crate::err;
+use crate::error::{Data, DecoderError, MemoryError};
+use crate::packets::TryFromIterator;
 use core::iter::Chain;
 
 /// An MQTT [`PUBLISH` packet](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718037)
@@ -41,7 +39,7 @@ where
     pub const TYPE: u8 = 3;
 
     /// Creates a new packet
-    pub fn new<T, P>(topic: T, payload: P, retain: bool) -> Result<Self, &'static str>
+    pub fn new<T, P>(topic: T, payload: P, retain: bool) -> Result<Self, MemoryError>
     where
         T: AsRef<[u8]>,
         P: AsRef<[u8]>,
@@ -97,7 +95,7 @@ impl<Bytes> TryFromIterator for Publish<Bytes>
 where
     Bytes: AnyVec<u8>,
 {
-    fn try_from_iter<T>(iter: T) -> Result<Self, &'static str>
+    fn try_from_iter<T>(iter: T) -> Result<Self, DecoderError>
     where
         T: IntoIterator<Item = u8>,
     {
@@ -108,7 +106,7 @@ where
         //  - packet ID
         let mut decoder = Decoder::new(iter);
         let (Self::TYPE, [dup, qos0, qos1, retain]) = decoder.header()? else {
-            return Err("Invalid packet type");
+            return Err(err!(Data::SpecViolation, "invalid packet type"))?;
         };
         // Limit length
         let len = decoder.packetlen()?;

@@ -3,11 +3,10 @@
 
 #[cfg(feature = "std")]
 pub fn main() {
-    use mqtt_tiny::{
-        packets::{ToWriter, TryFromReader},
-        Connack, Connect, Disconnect, Puback, Publish,
-    };
-    use std::{net::TcpStream, time::UNIX_EPOCH};
+    use mqtt_tiny::packets::{ToWriter, TryFromReader};
+    use mqtt_tiny::{Connack, Connect, Disconnect, Puback, Publish};
+    use std::net::TcpStream;
+    use std::time::UNIX_EPOCH;
 
     // Connect to a server
     let mut connection = TcpStream::connect("127.0.0.1:1883").expect("failed to connect to server");

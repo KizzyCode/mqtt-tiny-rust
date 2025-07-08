@@ -1,7 +1,8 @@
 #![cfg(any(feature = "std", feature = "arrayvec"))]
 
 use core::ops::Deref;
-use mqtt_tiny::{packets::TryFromIterator, Connect};
+use mqtt_tiny::packets::TryFromIterator;
+use mqtt_tiny::Connect;
 
 // Select an appropriate vector type
 #[cfg(feature = "std")]

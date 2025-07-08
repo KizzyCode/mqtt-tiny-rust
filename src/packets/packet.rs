@@ -1,13 +1,23 @@
 //! A type-erased MQTT packet
 
-use crate::{
-    anyvec::AnyVec,
-    packets::{
-        connack::Connack, connect::Connect, disconnect::Disconnect, pingreq::Pingreq, pingresp::Pingresp,
-        puback::Puback, pubcomp::Pubcomp, publish::Publish, pubrec::Pubrec, pubrel::Pubrel, suback::Suback,
-        subscribe::Subscribe, unsuback::Unsuback, unsubscribe::Unsubscribe, TryFromIterator,
-    },
-};
+use crate::anyvec::AnyVec;
+use crate::err;
+use crate::error::{Data, DecoderError};
+use crate::packets::connack::Connack;
+use crate::packets::connect::Connect;
+use crate::packets::disconnect::Disconnect;
+use crate::packets::pingreq::Pingreq;
+use crate::packets::pingresp::Pingresp;
+use crate::packets::puback::Puback;
+use crate::packets::pubcomp::Pubcomp;
+use crate::packets::publish::Publish;
+use crate::packets::pubrec::Pubrec;
+use crate::packets::pubrel::Pubrel;
+use crate::packets::suback::Suback;
+use crate::packets::subscribe::Subscribe;
+use crate::packets::unsuback::Unsuback;
+use crate::packets::unsubscribe::Unsubscribe;
+use crate::packets::TryFromIterator;
 
 /// A type-erased MQTT packet
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -47,13 +57,13 @@ where
     TopicsQosSeq: AnyVec<(Bytes, u8)>,
     Bytes: AnyVec<u8>,
 {
-    fn try_from_iter<T>(iter: T) -> Result<Self, &'static str>
+    fn try_from_iter<T>(iter: T) -> Result<Self, DecoderError>
     where
         T: IntoIterator<Item = u8>,
     {
         // We have to peek at the header to determine the type
         let mut decoder = iter.into_iter().peekable();
-        let header = decoder.peek().ok_or("Empty packet")?;
+        let header = decoder.peek().ok_or(err!(Data::Truncated, "empty packet"))?;
 
         // Select the appropriate packet depending on the type
         match header >> 4 {
@@ -71,7 +81,7 @@ where
             Subscribe::<TopicsQosSeq, Bytes>::TYPE => Subscribe::try_from_iter(&mut decoder).map(Self::Subscribe),
             Unsuback::TYPE => Unsuback::try_from_iter(&mut decoder).map(Self::Unsuback),
             Unsubscribe::<TopicsSeq, Bytes>::TYPE => Unsubscribe::try_from_iter(&mut decoder).map(Self::Unsubscribe),
-            _ => Err("Unknown packet type"),
+            _ => Err(err!(Data::SpecViolation, "unknown packet type"))?,
         }
     }
 }

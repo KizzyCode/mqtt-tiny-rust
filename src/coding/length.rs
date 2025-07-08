@@ -19,8 +19,8 @@ impl Length {
     /// # Panics
     /// This function panics if the total accumulated length is greater than `usize::MAX`.
     pub fn u8(mut self, _u8: &u8) -> Self {
-        #[allow(clippy::expect_used, reason = "Serious API misuse")]
-        (self.len = self.len.checked_add(1).expect("Accumulated length is too large"));
+        #[allow(clippy::expect_used, reason = "serious API misuse")]
+        (self.len = self.len.checked_add(1).expect("accumulated length is too large"));
         self
     }
 
@@ -29,8 +29,8 @@ impl Length {
     /// # Panics
     /// This function panics if the total accumulated length is greater than `usize::MAX`.
     pub fn u16(mut self, _u16: &u16) -> Self {
-        #[allow(clippy::expect_used, reason = "Serious API misuse")]
-        (self.len = self.len.checked_add(2).expect("Accumulated length is too large"));
+        #[allow(clippy::expect_used, reason = "serious API misuse")]
+        (self.len = self.len.checked_add(2).expect("accumulated length is too large"));
         self
     }
 
@@ -42,8 +42,8 @@ impl Length {
     where
         T: AsRef<[u8]> + IntoIterator<Item = u8>,
     {
-        #[allow(clippy::expect_used, reason = "Serious API misuse")]
-        (self.len = self.len.checked_add(raw.as_ref().len()).expect("Accumulated length is too large"));
+        #[allow(clippy::expect_used, reason = "serious API misuse")]
+        (self.len = self.len.checked_add(raw.as_ref().len()).expect("accumulated length is too large"));
         self
     }
 
@@ -56,10 +56,10 @@ impl Length {
     where
         T: AsRef<[u8]> + IntoIterator<Item = u8>,
     {
-        #[allow(clippy::expect_used, reason = "Serious API misuse")]
+        #[allow(clippy::expect_used, reason = "serious API misuse")]
         (self.len = (self.len.checked_add(2))
             .and_then(|len| len.checked_add(bytes.as_ref().len()))
-            .expect("Accumulated length is too large"));
+            .expect("accumulated length is too large"));
         self
     }
 
@@ -68,8 +68,8 @@ impl Length {
     /// # Panics
     /// This function panics if the total accumulated length is greater than `usize::MAX`.
     pub fn bitmap(mut self, _bits: &[bool; 8]) -> Self {
-        #[allow(clippy::expect_used, reason = "Serious API misuse")]
-        (self.len = self.len.checked_add(1).expect("Accumulated length is too large"));
+        #[allow(clippy::expect_used, reason = "serious API misuse")]
+        (self.len = self.len.checked_add(1).expect("accumulated length is too large"));
         self
     }
 
@@ -80,12 +80,12 @@ impl Length {
     /// accumulated length is greater than `usize::MAX`.
     pub fn header(mut self, type_: &u8, _flags: &[bool; 4]) -> Self {
         // Validate type value
-        #[allow(clippy::panic, reason = "Serious API misuse")]
-        (assert!(*type_ <= 15, "Packet type is too large"));
+        #[allow(clippy::panic, reason = "serious API misuse")]
+        (assert!(*type_ <= 15, "packet type is too large"));
 
         // Accumulate length
-        #[allow(clippy::expect_used, reason = "Serious API misuse")]
-        (self.len = self.len.checked_add(1).expect("Accumulated length is too large"));
+        #[allow(clippy::expect_used, reason = "serious API misuse")]
+        (self.len = self.len.checked_add(1).expect("accumulated length is too large"));
         self
     }
 
@@ -96,10 +96,10 @@ impl Length {
     /// accumulated length is greater than `usize::MAX`.
     pub fn packetlen(mut self, len: &usize) -> Self {
         // Validate and compute packet length size
-        #[allow(clippy::panic, reason = "Packet length must be encoded in 4 or less heptets")]
-        #[allow(clippy::unusual_byte_groupings, reason = "Length bytes are encoded in heptets")]
+        #[allow(clippy::panic, reason = "packet length must be encoded in 4 or less heptets")]
+        #[allow(clippy::unusual_byte_groupings, reason = "length bytes are encoded in heptets")]
         let len_size = match len {
-            0b1_0000000_0000000_0000000_0000000.. => panic!("Packet length is too large"),
+            0b1_0000000_0000000_0000000_0000000.. => panic!("packet length is too large"),
             0b1_0000000_0000000_0000000.. => 4,
             0b1_0000000_0000000.. => 3,
             0b1_0000000.. => 2,
@@ -107,8 +107,8 @@ impl Length {
         };
 
         // Accumulate length
-        #[allow(clippy::expect_used, reason = "Serious API misuse")]
-        (self.len = self.len.checked_add(len_size).expect("Accumulated length is too large"));
+        #[allow(clippy::expect_used, reason = "serious API misuse")]
+        (self.len = self.len.checked_add(len_size).expect("accumulated length is too large"));
         self
     }
 

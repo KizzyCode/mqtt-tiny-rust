@@ -1,6 +1,8 @@
 //! An iterator-based decoder
 
 use crate::anyvec::AnyVec;
+use crate::err;
+use crate::error::{Data, DataError, DecoderError, MemoryError};
 use core::iter::{Peekable, Take};
 
 /// An iterator-based decoder
@@ -37,7 +39,7 @@ where
     /// # Note
     /// This function is greedy. As raw read is unbounded by definition, this function will simply read as much data as
     /// possible until the underlying source is exhausted. Limit the source using [`Self::limit`] if necessary.
-    pub fn raw_remainder<T>(&mut self) -> Result<T, &'static str>
+    pub fn raw_remainder<T>(&mut self) -> Result<T, MemoryError>
     where
         T: AnyVec<u8>,
     {
@@ -51,12 +53,12 @@ where
     }
 
     /// Reads a `u8`
-    pub fn u8(&mut self) -> Result<u8, &'static str> {
-        self.source.next().ok_or("Truncated input")
+    pub fn u8(&mut self) -> Result<u8, DataError> {
+        self.source.next().ok_or(err!(Data::Truncated, "truncated input"))
     }
 
     /// Reads some raw bytes as-is into a fixed-size array
-    pub fn raw<const SIZE: usize>(&mut self) -> Result<[u8; SIZE], &'static str> {
+    pub fn raw<const SIZE: usize>(&mut self) -> Result<[u8; SIZE], DataError> {
         // Fill an entire array of the requested bytes
         let mut array = [0; SIZE];
         for slot in array.iter_mut() {
@@ -67,13 +69,13 @@ where
     }
 
     /// Reads a `u16`
-    pub fn u16(&mut self) -> Result<u16, &'static str> {
+    pub fn u16(&mut self) -> Result<u16, DataError> {
         let bytes = self.raw()?;
         Ok(u16::from_be_bytes(bytes))
     }
 
     /// Reads a length-prefixed byte field
-    pub fn bytes<T>(&mut self) -> Result<T, &'static str>
+    pub fn bytes<T>(&mut self) -> Result<T, DecoderError>
     where
         T: AnyVec<u8>,
     {
@@ -81,7 +83,7 @@ where
         let length = self.u16()? as usize;
         let mut bytes = T::default();
         for _ in 0..length {
-            // Copy each byte
+            // Copy eacch byte
             let byte = self.u8()?;
             bytes.push(byte)?;
         }
@@ -89,7 +91,7 @@ where
     }
 
     /// Reads a byte as bitmap
-    pub fn bitmap(&mut self) -> Result<[bool; 8], &'static str> {
+    pub fn bitmap(&mut self) -> Result<[bool; 8], DataError> {
         let byte = self.u8()?;
         Ok([
             byte & 0b10000000 != 0,
@@ -104,13 +106,13 @@ where
     }
 
     /// Reads a header byte and decodes it into packet type and associated flags (as bitmap)
-    pub fn header(&mut self) -> Result<(u8, [bool; 4]), &'static str> {
+    pub fn header(&mut self) -> Result<(u8, [bool; 4]), DataError> {
         let byte = self.u8()?;
         Ok((byte >> 4, [byte & 0b1000 != 0, byte & 0b0100 != 0, byte & 0b0010 != 0, byte & 0b0001 != 0]))
     }
 
     /// Reads a packet length field
-    pub fn packetlen(&mut self) -> Result<usize, &'static str> {
+    pub fn packetlen(&mut self) -> Result<usize, DataError> {
         // Parse length
         let mut value = 0;
         for (pos, byte) in (&mut self.source).enumerate() {
@@ -120,10 +122,10 @@ where
 
             // Check for end-of-length
             match byte & 0b1000_0000 {
-                // Multi-byte length with a leading zero heptet
-                0b1000_0000 if byte == 0b1000_0000 && value == 0 => return Err("Invalid packet length"),
+                // Multi-byte length with leading zero heptets
+                0b1000_0000 if value == 0 => return Err(err!(Data::SpecViolation, "invalid length"))?,
                 // Not the last byte but further length bytes are invalid
-                0b1000_0000 if pos > 2 => return Err("Packet length is too large"),
+                0b1000_0000 if pos > 2 => return Err(err!(Data::SpecViolation, "length is too large"))?,
                 // Not the last byte and further length bytes are allowed
                 0b1000_0000 => continue,
                 // Length byte is the last byte
@@ -132,11 +134,11 @@ where
         }
 
         // The packet length is truncated
-        Err("Truncated input")
+        Err(err!(Data::Truncated, "truncated input"))?
     }
 
     /// Reads an optional `u16`
-    pub fn optional_u16(&mut self, condition: bool) -> Result<Option<u16>, &'static str> {
+    pub fn optional_u16(&mut self, condition: bool) -> Result<Option<u16>, DataError> {
         match condition {
             true => self.u16().map(Some),
             false => Ok(None),
@@ -144,7 +146,7 @@ where
     }
 
     /// Reads an optional length-prefixed byte field
-    pub fn optional_bytes<T>(&mut self, condition: bool) -> Result<Option<T>, &'static str>
+    pub fn optional_bytes<T>(&mut self, condition: bool) -> Result<Option<T>, DecoderError>
     where
         T: AnyVec<u8>,
     {
@@ -175,7 +177,7 @@ where
     /// This function is greedy. As there is no way to know how much topics to read, this function will simply read as
     /// much bytes as possible until the underlying source is exhausted. Limit the source using [`Self::limit`] if
     /// necessary.
-    pub fn topics<S, T>(&mut self) -> Result<S, &'static str>
+    pub fn topics<S, T>(&mut self) -> Result<S, DecoderError>
     where
         S: AnyVec<T>,
         T: AnyVec<u8>,
@@ -196,7 +198,7 @@ where
     /// This function is greedy. As there is no way to know how much tuples to read, this function will simply read as
     /// much bytes as possible until the underlying source is exhausted. Limit the source using [`Self::limit`] if
     /// necessary.
-    pub fn topics_qos<S, T>(&mut self) -> Result<S, &'static str>
+    pub fn topics_qos<S, T>(&mut self) -> Result<S, DecoderError>
     where
         S: AnyVec<(T, u8)>,
         T: AnyVec<u8>,

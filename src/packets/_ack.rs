@@ -26,11 +26,13 @@ macro_rules! acklike {
             }
         }
         impl $crate::packets::TryFromIterator for $type {
-            fn try_from_iter<T>(iter: T) -> Result<Self, &'static str>
+            fn try_from_iter<T>(iter: T) -> Result<Self, crate::error::DecoderError>
             where
                 T: IntoIterator<Item = u8>,
             {
+                use crate::err;
                 use crate::coding::Decoder;
+                use crate::error::Data;
 
                 // Read packet:
                 //  - header type and `0` flags
@@ -38,10 +40,10 @@ macro_rules! acklike {
                 //  - packet ID
                 let mut decoder = Decoder::new(iter);
                 let (Self::TYPE, _flags) = decoder.header()? else {
-                    return Err("Invalid packet type");
+                    return Err(err!(Data::SpecViolation, "invalid packet type"))?;
                 };
                 let Self::BODY_LEN = decoder.packetlen()? else {
-                    return Err("Invalid packet length");
+                    return Err(err!(Data::SpecViolation, "invalid packet length"))?;
                 };
                 // Read fields
                 let packet_id = decoder.u16()?;

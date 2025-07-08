@@ -1,8 +1,10 @@
 //! MQTT packet types
 
-pub mod packet;
+use crate::error::DecoderError;
+
 pub mod connack;
 pub mod connect;
+pub mod packet;
 pub mod publish;
 pub mod subscribe;
 pub mod unsubscribe;
@@ -15,7 +17,7 @@ where
     Self: Sized,
 {
     /// Tries to build `Self` from the given byte iterator
-    fn try_from_iter<T>(iter: T) -> Result<Self, &'static str>
+    fn try_from_iter<T>(iter: T) -> Result<Self, DecoderError>
     where
         T: IntoIterator<Item = u8>;
 }
@@ -36,10 +38,12 @@ impl<T> TryFromReader for T
 where
     T: TryFromIterator,
 {
+    #[allow(clippy::unbuffered_bytes, reason = "implementors may pass a buffered reader if appropriate")]
     fn try_read<R>(reader: R) -> Result<Self, std::io::Error>
     where
         R: std::io::Read,
     {
+        use crate::error::Decoding;
         use std::io::{Error, ErrorKind};
 
         // Create a byte iterator from the reader
@@ -54,7 +58,12 @@ where
         match (Self::try_from_iter(iter), last_error) {
             (Ok(value), _) => Ok(value),
             (Err(_), Some(e)) => Err(e),
-            (Err(e), _) => Err(Error::new(ErrorKind::InvalidData, e)),
+            (Err(e), _) => match e.variant {
+                // Map error to an appropriate I/O error kind
+                Decoding::Truncated => Err(Error::new(ErrorKind::UnexpectedEof, e)),
+                Decoding::SpecViolation => Err(Error::new(ErrorKind::InvalidData, e)),
+                Decoding::Memory => Err(Error::new(ErrorKind::OutOfMemory, e)),
+            },
         }
     }
 }

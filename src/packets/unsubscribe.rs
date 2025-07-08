@@ -1,15 +1,14 @@
 //! MQTT [`UNSUBSCRIBE`](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718072)
 
-use crate::{
-    anyvec::AnyVec,
-    coding::{
-        encoder::{PacketLenIter, TopicsIter, U16Iter, U8Iter, Unit},
-        length::Length,
-        Decoder, Encoder,
-    },
-    packets::TryFromIterator,
-};
-use core::{iter::Chain, marker::PhantomData};
+use crate::anyvec::AnyVec;
+use crate::coding::encoder::{PacketLenIter, TopicsIter, U16Iter, U8Iter, Unit};
+use crate::coding::length::Length;
+use crate::coding::{Decoder, Encoder};
+use crate::err;
+use crate::error::{Data, DecoderError, MemoryError};
+use crate::packets::TryFromIterator;
+use core::iter::Chain;
+use core::marker::PhantomData;
 
 /// An MQTT [`UNSUBSCRIBE` packet](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718072)
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -30,7 +29,7 @@ where
     pub const TYPE: u8 = 10;
 
     /// Creates a new packet
-    pub fn new<S, T>(packet_id: u16, topics: S) -> Result<Self, &'static str>
+    pub fn new<S, T>(packet_id: u16, topics: S) -> Result<Self, MemoryError>
     where
         S: IntoIterator<Item = T>,
         T: AsRef<[u8]>,
@@ -62,7 +61,7 @@ where
     Seq: AnyVec<Bytes>,
     Bytes: AnyVec<u8>,
 {
-    fn try_from_iter<T>(iter: T) -> Result<Self, &'static str>
+    fn try_from_iter<T>(iter: T) -> Result<Self, DecoderError>
     where
         T: IntoIterator<Item = u8>,
     {
@@ -74,7 +73,7 @@ where
         //     - topic filter
         let mut decoder = Decoder::new(iter);
         let (Self::TYPE, [false, false, true, false]) = decoder.header()? else {
-            return Err("Invalid packet type/header");
+            return Err(err!(Data::SpecViolation, "invalid packet type/header"))?;
         };
         // Limit length and make decoder peekable
         let len = decoder.packetlen()?;

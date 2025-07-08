@@ -15,9 +15,13 @@ platform:
 # The Rust feature matrix
 configuration:
   - --features=
+  - --features=backtrace
   - --features=std
+  - --features=std,backtrace
   - --features=arrayvec
+  - --features=arrayvec,backtrace
   - --features=heapless
+  - --features=heapless,backtrace
 
 
 # General environment vars

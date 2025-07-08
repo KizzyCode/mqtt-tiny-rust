@@ -1,10 +1,9 @@
 #![cfg(any(feature = "std", feature = "arrayvec"))]
 
 use core::ops::Deref;
-use mqtt_tiny::{
-    anyvec::AnyVec,
-    coding::{length::Length, Decoder, Encoder},
-};
+use mqtt_tiny::anyvec::AnyVec;
+use mqtt_tiny::coding::length::Length;
+use mqtt_tiny::coding::{Decoder, Encoder};
 
 // Select an appropriate vector type
 #[cfg(feature = "std")]

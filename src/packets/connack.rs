@@ -1,12 +1,10 @@
 //! MQTT [`CONNACK`](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718033)
 
-use crate::{
-    coding::{
-        encoder::{PacketLenIter, U8Iter, Unit},
-        Decoder, Encoder,
-    },
-    packets::TryFromIterator,
-};
+use crate::coding::encoder::{PacketLenIter, U8Iter, Unit};
+use crate::coding::{Decoder, Encoder};
+use crate::err;
+use crate::error::{Data, DecoderError};
+use crate::packets::TryFromIterator;
 use core::iter::Chain;
 
 /// An MQTT [`CONNACK` packet](https://docs.oasis-open.org/mqtt/mqtt/v3.1.1/os/mqtt-v3.1.1-os.html#_Toc398718033)
@@ -39,7 +37,7 @@ impl Connack {
     }
 }
 impl TryFromIterator for Connack {
-    fn try_from_iter<T>(iter: T) -> Result<Self, &'static str>
+    fn try_from_iter<T>(iter: T) -> Result<Self, DecoderError>
     where
         T: IntoIterator<Item = u8>,
     {
@@ -50,11 +48,12 @@ impl TryFromIterator for Connack {
         //  - return code
         let mut decoder = Decoder::new(iter);
         let (Self::TYPE, _flags) = decoder.header()? else {
-            return Err("Invalid packet type");
+            return Err(err!(Data::SpecViolation, "invalid packet type"))?;
         };
         let Self::BODY_LEN = decoder.packetlen()? else {
-            return Err("Invalid packet length");
+            return Err(err!(Data::SpecViolation, "invalid packet length"))?;
         };
+
         // Read fields
         let [_, _, _, _, _, _, _, session_present] = decoder.bitmap()?;
         let return_code = decoder.u8()?;

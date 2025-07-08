@@ -1,16 +1,10 @@
 // Provides some type aliases that offer reasonable defaults for the underlying container types
 
-// Sanity check
-#[cfg(not(any(
-    // Invalid use of `std` with `arrayvec` or `heapless`
-    all(feature = "std", not(any(feature = "arrayvec", feature = "heapless"))),
-    // Invalid use of `heapless` with `std` or `arrayvec`
-    all(feature = "heapless", not(any(feature = "std", feature = "arrayvec"))),
-    // Invalid use of `arrayvec` with `heapless` or `std`
-    all(feature = "arrayvec", not(any(feature = "heapless", feature = "std"))),
-)))]
-// Raise a compiler error immediately
-compile_error!("Must not use multiple backing features together (i.e. `std` or `arrayvec` or `heapless`)");
+/// Validates the feature combination
+const _FEATURES_VALID: bool = match (cfg!(feature = "std"), cfg!(feature = "arrayvec"), cfg!(feature = "heapless")) {
+    (true, false, false) | (false, true, false) | (false, false, true) => true,
+    _ => panic!("you must not select more than one backing at a time (i.e. `std` or `arrayvec` or `heapless`)"),
+};
 
 /// The default byte container type used within top-level types
 #[cfg(feature = "std")]
